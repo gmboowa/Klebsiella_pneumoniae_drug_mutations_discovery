@@ -1,0 +1,100 @@
+#! /bin/bash
+
+start=$SECONDS
+echo $HOSTNAME
+
+echo $"Written by"  'Gerald Mboowa 🙏🧘 🍷🐒😍 ☣ 🇩🇪 ' | sed $'s/Gerald Mboowa 🙏🧘 🍷🐒😍 ☣ 🇩🇪 /\e[32m&\e[0m/';
+
+echo $"This is" 'FastQC MultiQC Snippy Rapid Bacterial SNP Calling Script for Klebsiella pneumoniae Version 1.0.0' | sed $'s/FastQC MultiQC Snippy Rapid Bacterial SNP Calling Script for Klebsiella pneumoniae Version 1.0.0/\e[36m&\e[0m/';
+
+echo $"Author email"  '...@gmail.com' or '...@chs.mak.ac.ug' or '...@bcm.edu' or '...@alumni.bcm.edu' | sed $'s/...@gmail.com or ...@chs.mak.ac.ug or ...@bcm.edu or ...@alumni.bcm.edu/\e[33m&\e[0m/';
+
+cd ~/working_directory
+
+##literature references utilised here include;
+
+##https://mbio.asm.org/content/9/2/e00440-18 {Genomic Analysis of a Pan-Resistant Isolate of Klebsiella pneumoniae, United States 2016}
+
+
+
+echo $"Now Running FastQC for the Samples" | sed $'s/Now Running FastQC for the Samples/\e[32m&\e[0m/';
+
+##for sample in `cat list.txt`
+##do
+
+
+  ##fastqc ${sample}*_1.fastq.gz ${sample}*_2.fastq.gz
+
+  ##fastqc $*_1.fq.gz $*_2.fq.gz
+
+##done
+
+echo $"Now Running MultiQC for the Samples" | sed $'s/Now Running MultiQC for the Samples/\e[36m&\e[0m/';
+
+##multiqc .
+
+echo $"Now Running Snippy for the Samples" | sed $'s/Now Running Snippy for the Samples/\e[33m&\e[0m/';
+
+
+for sample in `cat list.txt`
+do
+
+  R1=${sample}_1.fastq.gz
+  R2=${sample}_2.fastq.gz
+
+/Users/geraldmboowa/snippy/bin/snippy --cpus 16 --outdir ${sample}.snps --ref /Users/geraldmboowa/Klebsiella_pneumoniae/Klebsiella_pneumoniae_subsp.pneumoniae_HS11286.gbk --R1 $R1 --R2 $R2
+
+
+echo $"Now Running Klebsiella pneumoniae Drug Resistance Annotations for the Samples" | sed $'s/Now Running Klebsiella pneumoniae Drug Resistance Annotations for the Samples/\e[31m&\e[0m/';
+
+grep -E "aacA4|rmtC|bla|ramR|oqxA|oqxB|gyrA|parC|fosA|mgrB|sul1|tet|mph" ${sample}.snps/snps.tab | grep "missense_variant"  > ${sample}.Details-of-Klebsiella_pneumoniae_subsp.pneumoniae-and-Drug-resistance.txt
+
+echo $"Now Running Summaries for Klebsiella pneumoniae and Drug Resistance for the Samples" | sed $'s/Now Running Summaries for Klebsiella pneumoniae and Drug Resistance for the Samples/\e[33m&\e[0m/';
+
+
+##Interpretation of Drug Resistance for Klebsiella pneumoniae
+##aacA4, rmtC
+
+{ grep -q -E 'aacA4|rmtC' ${sample}.Details-of-Klebsiella_pneumoniae_subsp.pneumoniae-and-Drug-resistance.txt; if [ $? -eq 0 ]; then echo "Amikacin Resistance Detected| Gentamicin Resistance Detected| Tobramycin Resistance Detected" ; fi ;} > ${sample}.Aminoglycoside.Resistance.txt
+
+##blaCTX-M-15, blaSHV-28, blaCMY-6, blaNDM-1, blaCMY-6, blaNDM-1
+
+{ grep -q -E 'bla' ${sample}.Details-of-Klebsiella_pneumoniae_subsp.pneumoniae-and-Drug-resistance.txt; if [ $? -eq 0 ]; then echo "Ampicillin Resistance Detected| Aztreonam Resistance Detected| Cefazolin Resistance Detected|Cefepime Resistance Detected| Cefotaxime Resistance Detected| Cefotaxime-clavulanic acid Resistance Detected |Cefepime Resistance Detected| Cefoxitin Resistance Detected| Ceftazidime Resistance Detected|Ceftazidime-avibactam Resistance Detected| Ceftazidime-clavulanic acid Resistance Detected| Ceftriaxone Resistance Detected |Doripenem Resistance Detected |Ertapenem Resistance Detected |Imipenem Resistance Detected |Meropenem Resistance Detected |Piperacillin-tazobactam Resistance Detected" ; fi ;} > ${sample}.Beta-lactam.Resistance.txt
+
+##Truncated ramR
+{ grep -q -E 'ramR' ${sample}.Details-of-Klebsiella_pneumoniae_subsp.pneumoniae-and-Drug-resistance.txt; if [ $? -eq 0 ]; then echo "Chloramphenicol Resistance Detected" ; fi ;} > ${sample}.Chloramphenicol.Resistance.txt
+
+##oqxA, oqxB, gyrA and parC mutations, truncated ramR
+{ grep -q -E 'ramR|oqxA|oqxB|gyrA|parC' ${sample}.Details-of-Klebsiella_pneumoniae_subsp.pneumoniae-and-Drug-resistance.txt; if [ $? -eq 0 ]; then echo "Ciprofloxacin and Levofloxacin Resistance Detected" ; fi ;} > ${sample}.Fluoroquinolone.Resistance.txt
+
+##fosA
+{ grep -q -E 'fosA' ${sample}.Details-of-Klebsiella_pneumoniae_subsp.pneumoniae-and-Drug-resistance.txt; if [ $? -eq 0 ]; then echo "Fosfomycin Resistance Detected" ; fi ;} > ${sample}.Fosfomycin.Resistance.txt
+
+##Disrupted mgrB
+{ grep -q -E 'mgrB' ${sample}.Details-of-Klebsiella_pneumoniae_subsp.pneumoniae-and-Drug-resistance.txt; if [ $? -eq 0 ]; then echo "Colistin | Polymyxin-B Resistance Detected" ; fi ;} > ${sample}.Polymyxin.Resistance.txt
+
+##sul1
+{ grep -q -E 'sul1' ${sample}.Details-of-Klebsiella_pneumoniae_subsp.pneumoniae-and-Drug-resistance.txt; if [ $? -eq 0 ]; then echo "Trimethoprim-sulfamethoxazole Resistance Detected" ; fi ;} > ${sample}.Sulfonamide.Resistance.txt
+
+####tet(A), truncated ramR
+{ grep -q -E 'tet' ${sample}.Details-of-Klebsiella_pneumoniae_subsp.pneumoniae-and-Drug-resistance.txt; if [ $? -eq 0 ]; then echo "Tetracycline | Tigecycline Resistance Detected" ; fi ;} > ${sample}.Tetracycline.Resistance.txt
+
+##mph(A)
+
+{ grep -q -E 'mph' ${sample}.Details-of-Klebsiella_pneumoniae_subsp.pneumoniae-and-Drug-resistance.txt; if [ $? -eq 0 ]; then echo "Macrolide Resistance Detected" ; fi ;} > ${sample}.Macrolide.Resistance.txt
+
+
+find . -type f -size 0 -delete
+
+echo $"Bioinformatics is not something you are taught, it’s a way of life?" | sed $'s/Bioinformatics is not something you are taught, it’s a way of life?/\e[33m&\e[0m/';
+
+
+##Get more on these color codes at https://stackoverflow.com/questions/5947742/how-to-change-the-output-color-of-echo-in-linux
+
+end=$SECONDS
+
+echo "duration: $((end-start)) seconds."
+
+done
+
+exit
