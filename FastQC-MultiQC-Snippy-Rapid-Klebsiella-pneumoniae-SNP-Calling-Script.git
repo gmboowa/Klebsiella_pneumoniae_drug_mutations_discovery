@@ -19,19 +19,19 @@ cd ~/working_directory
 
 echo $"Now Running FastQC for the Samples" | sed $'s/Now Running FastQC for the Samples/\e[32m&\e[0m/';
 
-##for sample in `cat list.txt`
-##do
+for sample in `cat list.txt`
+do
 
 
-  ##fastqc ${sample}*_1.fastq.gz ${sample}*_2.fastq.gz
+  fastqc ${sample}*_1.fastq.gz ${sample}*_2.fastq.gz
 
   ##fastqc $*_1.fq.gz $*_2.fq.gz
 
-##done
+done
 
 echo $"Now Running MultiQC for the Samples" | sed $'s/Now Running MultiQC for the Samples/\e[36m&\e[0m/';
 
-##multiqc .
+multiqc .
 
 echo $"Now Running Snippy for the Samples" | sed $'s/Now Running Snippy for the Samples/\e[33m&\e[0m/';
 
