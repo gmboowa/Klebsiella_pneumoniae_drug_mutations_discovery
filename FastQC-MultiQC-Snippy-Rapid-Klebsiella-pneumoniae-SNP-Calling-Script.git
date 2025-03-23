@@ -1,61 +1,77 @@
-#! /bin/bash
+#!/bin/bash
 
-# Start timing the script
+# ===================================================
+# Klebsiella pneumoniae Rapid SNP Calling Pipeline
+#
+# Description: FastQC → MultiQC → Snippy → Resistance Annotation
+# ===================================================
+
 start=$SECONDS
-echo $HOSTNAME
+echo "Running on: $HOSTNAME"
 
-# Display script metadata
-echo $"Written by"  'Gerald Mboowa 🙏🧘 🍷🐒😍 ☣ 🇩🇪 ' | sed $'s/Gerald Mboowa 🙏🧘 🍷🐒😍 ☣ 🇩🇪 /\e[32m&\e[0m/';
-echo $"This is" 'FastQC MultiQC Snippy Rapid Bacterial SNP Calling Script for Klebsiella pneumoniae Version 1.0.0' | sed $'s/FastQC MultiQC Snippy Rapid Bacterial SNP Calling Script for Klebsiella pneumoniae Version 1.0.0/\e[36m&\e[0m/';
-echo $"Author email"  '...@gmail.com' | sed $'s/...@gmail.com/\e[33m&\e[0m/';
+# Script metadata
+echo -e "Written by \e[32m\e[0m"
+echo -e "This is \e[36mFastQC MultiQC Snippy Rapid Bacterial SNP Calling Script for Klebsiella pneumoniae Version 1.0.0\e[0m"
+echo -e "Author email: \e[33m...@gmail.com\e[0m"
 
 # Change to working directory
 cd ~/working_directory || { echo "Working directory not found! Exiting."; exit 1; }
 
-# Literature references
+# Reference for background reading
 echo "Literature references include:"
 echo "https://mbio.asm.org/content/9/2/e00440-18 {Genomic Analysis of a Pan-Resistant Isolate of Klebsiella pneumoniae, United States 2016}"
 
-# Run FastQC
-echo $"Now Running FastQC for the Samples" | sed $'s/Now Running FastQC for the Samples/\e[32m&\e[0m/';
+# ---------------------------------------------------
+# Step 1: Quality Control - FastQC
+# ---------------------------------------------------
+echo -e "\e[32mNow Running FastQC for the Samples\e[0m"
 for sample in $(cat list.txt); do
   fastqc "${sample}"*_1.fastq.gz "${sample}"*_2.fastq.gz
 done
 
-# Run MultiQC
-echo $"Now Running MultiQC for the Samples" | sed $'s/Now Running MultiQC for the Samples/\e[36m&\e[0m/';
+# ---------------------------------------------------
+# Step 2: MultiQC Summary
+# ---------------------------------------------------
+echo -e "\e[36mNow Running MultiQC for the Samples\e[0m"
 multiqc .
 
-# Run Snippy
-echo $"Now Running Snippy for the Samples" | sed $'s/Now Running Snippy for the Samples/\e[33m&\e[0m/';
+# ---------------------------------------------------
+# Step 3: SNP Calling using Snippy
+# ---------------------------------------------------
+echo -e "\e[33mNow Running Snippy for the Samples\e[0m"
 for sample in $(cat list.txt); do
-  R1=${sample}_1.fastq.gz
-  R2=${sample}_2.fastq.gz
+  R1="${sample}_1.fastq.gz"
+  R2="${sample}_2.fastq.gz"
   snippy --cpus 16 --outdir "${sample}.snps" --ref /path/to/Klebsiella_pneumoniae_reference.gbk --R1 "$R1" --R2 "$R2"
 done
 
-# Annotate resistance genes
-echo $"Now Running Klebsiella pneumoniae Drug Resistance Annotations" | sed $'s/Now Running Klebsiella pneumoniae Drug Resistance Annotations/\e[31m&\e[0m/';
+# ---------------------------------------------------
+# Step 4: Drug Resistance Annotation
+# ---------------------------------------------------
+echo -e "\e[31mNow Running Klebsiella pneumoniae Drug Resistance Annotations\e[0m"
 for sample in $(cat list.txt); do
-  grep -E "aacA4|rmtC|bla|ramR|oqxA|oqxB|gyrA|parC|fosA|mgrB|sul1|tet|mph" "${sample}.snps/snps.tab" | grep "missense_variant" > "${sample}.Drug-Resistance-Details.txt"
+  grep -E "aacA4|rmtC|bla|ramR|oqxA|oqxB|gyrA|parC|fosA|mgrB|sul1|tet|mph" "${sample}.snps/snps.tab" \
+    | grep "missense_variant" > "${sample}.Drug-Resistance-Details.txt"
 
-  # Generate summaries for drug resistance
-  if grep -q -E "aacA4|rmtC" "${sample}.Drug-Resistance-Details.txt"; then echo "Aminoglycoside Resistance Detected"; fi > "${sample}.Aminoglycoside.Resistance.txt"
-  if grep -q -E "bla" "${sample}.Drug-Resistance-Details.txt"; then echo "Beta-Lactam Resistance Detected"; fi > "${sample}.Beta-lactam.Resistance.txt"
-  if grep -q -E "ramR" "${sample}.Drug-Resistance-Details.txt"; then echo "Chloramphenicol Resistance Detected"; fi > "${sample}.Chloramphenicol.Resistance.txt"
-  if grep -q -E "ramR|oqxA|oqxB|gyrA|parC" "${sample}.Drug-Resistance-Details.txt"; then echo "Fluoroquinolone Resistance Detected"; fi > "${sample}.Fluoroquinolone.Resistance.txt"
-  if grep -q -E "fosA" "${sample}.Drug-Resistance-Details.txt"; then echo "Fosfomycin Resistance Detected"; fi > "${sample}.Fosfomycin.Resistance.txt"
-  if grep -q -E "mgrB" "${sample}.Drug-Resistance-Details.txt"; then echo "Polymyxin Resistance Detected"; fi > "${sample}.Polymyxin.Resistance.txt"
-  if grep -q -E "sul1" "${sample}.Drug-Resistance-Details.txt"; then echo "Sulfonamide Resistance Detected"; fi > "${sample}.Sulfonamide.Resistance.txt"
-  if grep -q -E "tet" "${sample}.Drug-Resistance-Details.txt"; then echo "Tetracycline Resistance Detected"; fi > "${sample}.Tetracycline.Resistance.txt"
-  if grep -q -E "mph" "${sample}.Drug-Resistance-Details.txt"; then echo "Macrolide Resistance Detected"; fi > "${sample}.Macrolide.Resistance.txt"
+  # Summarize resistance by class
+  grep -q -E "aacA4|rmtC" "${sample}.Drug-Resistance-Details.txt" && echo "Aminoglycoside Resistance Detected" > "${sample}.Aminoglycoside.Resistance.txt"
+  grep -q -E "bla" "${sample}.Drug-Resistance-Details.txt" && echo "Beta-Lactam Resistance Detected" > "${sample}.Beta-lactam.Resistance.txt"
+  grep -q -E "ramR" "${sample}.Drug-Resistance-Details.txt" && echo "Chloramphenicol Resistance Detected" > "${sample}.Chloramphenicol.Resistance.txt"
+  grep -q -E "ramR|oqxA|oqxB|gyrA|parC" "${sample}.Drug-Resistance-Details.txt" && echo "Fluoroquinolone Resistance Detected" > "${sample}.Fluoroquinolone.Resistance.txt"
+  grep -q -E "fosA" "${sample}.Drug-Resistance-Details.txt" && echo "Fosfomycin Resistance Detected" > "${sample}.Fosfomycin.Resistance.txt"
+  grep -q -E "mgrB" "${sample}.Drug-Resistance-Details.txt" && echo "Polymyxin Resistance Detected" > "${sample}.Polymyxin.Resistance.txt"
+  grep -q -E "sul1" "${sample}.Drug-Resistance-Details.txt" && echo "Sulfonamide Resistance Detected" > "${sample}.Sulfonamide.Resistance.txt"
+  grep -q -E "tet" "${sample}.Drug-Resistance-Details.txt" && echo "Tetracycline Resistance Detected" > "${sample}.Tetracycline.Resistance.txt"
+  grep -q -E "mph" "${sample}.Drug-Resistance-Details.txt" && echo "Macrolide Resistance Detected" > "${sample}.Macrolide.Resistance.txt"
 done
 
-# Cleanup empty files
+# ---------------------------------------------------
+# Step 5: Clean up any empty files
+# ---------------------------------------------------
 find . -type f -size 0 -delete
 
 # Final message
-echo $"Bioinformatics is not something you are taught, it’s a way of life?" | sed $'s/Bioinformatics is not something you are taught, it’s a way of life?/\e[33m&\e[0m/';
+echo -e "\e[33mBioinformatics is not something you are taught, it’s a way of life?\e[0m"
 
 # Print duration
 end=$SECONDS
