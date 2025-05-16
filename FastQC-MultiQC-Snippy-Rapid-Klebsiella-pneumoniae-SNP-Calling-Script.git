@@ -1,78 +1,112 @@
-#!/bin/bash
-
-# ===================================================
-# Klebsiella pneumoniae Rapid SNP Calling Pipeline
+#!/usr/bin/env bash
+# ==============================================================================
+# KpSNP: Klebsiella pneumoniae Genomic Surveillance Pipeline
 #
-# Description: FastQC → MultiQC → Snippy → Resistance Annotation
-# ===================================================
+# Enhanced Features:
+# 1. Input validation & dynamic resource allocation
+# 2. Structured output organization
+# 3. Comprehensive error handling
+# 4. Antibiotic resistance reporting with AMR categories
+# 5. Runtime performance tracking
+# ==============================================================================
 
-start=$SECONDS
-echo "Running on: $HOSTNAME"
+set -euo pipefail  # Strict error handling
 
-# Script metadata
-echo -e "Written by \e[32m\e[0m"
-echo -e "This is \e[36mFastQC MultiQC Snippy Rapid Bacterial SNP Calling Script for Klebsiella pneumoniae Version 1.0.0\e[0m"
-echo -e "Author email: \e[33m...@gmail.com\e[0m"
+# Configuration
+start_time=$(date +%s)
+VERSION="2.1.0"
+REF_GENOME="/path/to/Klebsiella_pneumoniae_reference.gbk"
+AMR_GENES=("aacA4" "rmtC" "bla" "ramR" "oqxA" "oqxB" "gyrA" "parC" "fosA" "mgrB" "sul1" "tet" "mph")
+THREADS=$(nproc)  # Automatically detect available cores
 
-# Change to working directory
-cd ~/working_directory || { echo "Working directory not found! Exiting."; exit 1; }
+# Functions
+show_header() {
+    echo -e "\n\033[1;36mKpSNP v${VERSION}\033[0m"
+    echo -e "Started: $(date)"
+    echo -e "System: ${HOSTNAME}"
+    echo -e "CPU Threads: ${THREADS}"
+}
 
-# Reference for background reading
-echo "Literature references include:"
-echo "https://mbio.asm.org/content/9/2/e00440-18 {Genomic Analysis of a Pan-Resistant Isolate of Klebsiella pneumoniae, United States 2016}"
+validate_inputs() {
+    [[ -f "sample_list.txt" ]] || { echo "ERROR: Missing sample_list.txt"; exit 1; }
+    [[ -f "${REF_GENOME}" ]] || { echo "ERROR: Reference genome missing"; exit 1; }
+    command -v fastqc >/dev/null 2>&1 || { echo "ERROR: FastQC not installed"; exit 1; }
+}
 
-# ---------------------------------------------------
-# Step 1: Quality Control - FastQC
-# ---------------------------------------------------
-echo -e "\e[32mNow Running FastQC for the Samples\e[0m"
-for sample in $(cat list.txt); do
-  fastqc "${sample}"*_1.fastq.gz "${sample}"*_2.fastq.gz
-done
+run_qc() {
+    local sample=$1
+    echo -e "\n\033[1;34m[QC] Processing ${sample}\033[0m"
+    fastqc -t ${THREADS} "${sample}_1.fastq.gz" "${sample}_2.fastq.gz"
+}
 
-# ---------------------------------------------------
-# Step 2: MultiQC Summary
-# ---------------------------------------------------
-echo -e "\e[36mNow Running MultiQC for the Samples\e[0m"
-multiqc .
+call_variants() {
+    local sample=$1
+    echo -e "\n\033[1;32m[Variant Calling] ${sample}\033[0m"
+    snippy --cpus ${THREADS} \
+           --outdir "results/${sample}_snps" \
+           --ref ${REF_GENOME} \
+           --R1 "${sample}_1.fastq.gz" \
+           --R2 "${sample}_2.fastq.gz"
+}
 
-# ---------------------------------------------------
-# Step 3: SNP Calling using Snippy
-# ---------------------------------------------------
-echo -e "\e[33mNow Running Snippy for the Samples\e[0m"
-for sample in $(cat list.txt); do
-  R1="${sample}_1.fastq.gz"
-  R2="${sample}_2.fastq.gz"
-  snippy --cpus 16 --outdir "${sample}.snps" --ref /path/to/Klebsiella_pneumoniae_reference.gbk --R1 "$R1" --R2 "$R2"
-done
+generate_amr_report() {
+    local sample=$1
+    local snp_file="results/${sample}_snps/snps.tab"
+    local report_dir="results/${sample}_amr"
+    
+    mkdir -p "${report_dir}"
+    
+    echo -e "\n\033[1;35m[AMR Analysis] ${sample}\033[0m"
+    awk -v genes="${AMR_GENES[*]}" '
+    BEGIN { split(genes, arr, " ") }
+    $0 ~ "missense_variant" {
+        for (gene in arr) {
+            if ($0 ~ arr[gene]) {
+                print $0 > "'"${report_dir}/detailed_amr.txt"'"
+            }
+        }
+    }' "${snp_file}"
 
-# ---------------------------------------------------
-# Step 4: Drug Resistance Annotation
-# ---------------------------------------------------
-echo -e "\e[31mNow Running Klebsiella pneumoniae Drug Resistance Annotations\e[0m"
-for sample in $(cat list.txt); do
-  grep -E "aacA4|rmtC|bla|ramR|oqxA|oqxB|gyrA|parC|fosA|mgrB|sul1|tet|mph" "${sample}.snps/snps.tab" \
-    | grep "missense_variant" > "${sample}.Drug-Resistance-Details.txt"
+    # Generate summary report
+    declare -A resistance_categories=(
+        ["Aminoglycoside"]="aacA4|rmtC"
+        ["Beta-Lactam"]="bla"
+        ["Fluoroquinolone"]="ramR|oqxA|oqxB|gyrA|parC"
+        ["Fosfomycin"]="fosA"
+        ["Polymyxin"]="mgrB"
+        ["Sulfonamide"]="sul1"
+        ["Tetracycline"]="tet"
+        ["Macrolide"]="mph"
+    )
 
-  # Summarize resistance by class
-  grep -q -E "aacA4|rmtC" "${sample}.Drug-Resistance-Details.txt" && echo "Aminoglycoside Resistance Detected" > "${sample}.Aminoglycoside.Resistance.txt"
-  grep -q -E "bla" "${sample}.Drug-Resistance-Details.txt" && echo "Beta-Lactam Resistance Detected" > "${sample}.Beta-lactam.Resistance.txt"
-  grep -q -E "ramR" "${sample}.Drug-Resistance-Details.txt" && echo "Chloramphenicol Resistance Detected" > "${sample}.Chloramphenicol.Resistance.txt"
-  grep -q -E "ramR|oqxA|oqxB|gyrA|parC" "${sample}.Drug-Resistance-Details.txt" && echo "Fluoroquinolone Resistance Detected" > "${sample}.Fluoroquinolone.Resistance.txt"
-  grep -q -E "fosA" "${sample}.Drug-Resistance-Details.txt" && echo "Fosfomycin Resistance Detected" > "${sample}.Fosfomycin.Resistance.txt"
-  grep -q -E "mgrB" "${sample}.Drug-Resistance-Details.txt" && echo "Polymyxin Resistance Detected" > "${sample}.Polymyxin.Resistance.txt"
-  grep -q -E "sul1" "${sample}.Drug-Resistance-Details.txt" && echo "Sulfonamide Resistance Detected" > "${sample}.Sulfonamide.Resistance.txt"
-  grep -q -E "tet" "${sample}.Drug-Resistance-Details.txt" && echo "Tetracycline Resistance Detected" > "${sample}.Tetracycline.Resistance.txt"
-  grep -q -E "mph" "${sample}.Drug-Resistance-Details.txt" && echo "Macrolide Resistance Detected" > "${sample}.Macrolide.Resistance.txt"
-done
+    for category in "${!resistance_categories[@]}"; do
+        if grep -qE "${resistance_categories[$category]}" "${report_dir}/detailed_amr.txt"; then
+            echo "${category} Resistance Detected" >> "${report_dir}/amr_summary.txt"
+        fi
+    done
+}
 
-# ---------------------------------------------------
-# Step 5: Clean up any empty files
-# ---------------------------------------------------
-find . -type f -size 0 -delete
+main() {
+    show_header
+    validate_inputs
+    mkdir -p results/qc_reports
+    
+    # Process samples
+    while read sample; do
+        run_qc "${sample}"
+        call_variants "${sample}"
+        generate_amr_report "${sample}"
+    done < sample_list.txt
 
-# Final message
-echo -e "\e[33mBioinformatics is not something you are taught, it’s a way of life?\e[0m"
+    # Generate final reports
+    echo -e "\n\033[1;33m[Finalizing Reports]\033[0m"
+    multiqc results/qc_reports -o results/multiqc_report
+    find results -empty -delete
+    
+    # Runtime calculation
+    end_time=$(date +%s)
+    echo -e "\n\033[1;32mPipeline completed in $((end_time - start_time)) seconds\033[0m"
+}
 
-# Print duration
-end=$SECONDS
-echo "Duration: $((end - start)) seconds."
+# Execute main workflow
+main "$@"
